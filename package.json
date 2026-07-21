@@ -29,5 +29,8 @@
   "main": "vite.config.js",
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
 }

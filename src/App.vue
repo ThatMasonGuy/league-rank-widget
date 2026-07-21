@@ -269,6 +269,7 @@ function getTierIcon(tier) {
     'GRANDMASTER': Crown,
     'MASTER': Gem,
     'DIAMOND': Gem,
+    'EMERALD': Gem,
     'PLATINUM': Star,
     'GOLD': Star,
     'SILVER': Shield,
@@ -284,7 +285,8 @@ function getTierCardClass(tier) {
     "BRONZE": "bg-gradient-to-br from-orange-900/30 to-amber-950/30",
     "SILVER": "bg-gradient-to-br from-slate-600/25 to-slate-700/25",
     "GOLD": "bg-gradient-to-br from-yellow-900/30 to-amber-900/30",
-    "PLATINUM": "bg-gradient-to-br from-emerald-900/30 to-cyan-900/30",
+    "PLATINUM": "bg-gradient-to-br from-teal-900/30 to-cyan-900/30",
+    "EMERALD": "bg-gradient-to-br from-emerald-900/35 to-green-900/35",
     "DIAMOND": "bg-gradient-to-br from-blue-900/35 to-indigo-900/35",
     "MASTER": "bg-gradient-to-br from-purple-900/35 to-fuchsia-900/35",
     "GRANDMASTER": "bg-gradient-to-br from-red-900/35 to-rose-900/35",
@@ -299,7 +301,8 @@ function tierBadgeClass(tier) {
     "BRONZE": "bg-gradient-to-r from-orange-700 to-amber-600 text-orange-100 shadow-orange-600/20",
     "SILVER": "bg-gradient-to-r from-slate-300 to-slate-400 text-slate-900 shadow-slate-400/20",
     "GOLD": "bg-gradient-to-r from-yellow-500 to-amber-400 text-yellow-950 shadow-yellow-500/20",
-    "PLATINUM": "bg-gradient-to-r from-emerald-400 to-cyan-400 text-emerald-950 shadow-emerald-400/20",
+    "PLATINUM": "bg-gradient-to-r from-teal-300 to-cyan-400 text-teal-950 shadow-cyan-400/20",
+    "EMERALD": "bg-gradient-to-r from-emerald-400 to-green-500 text-emerald-950 shadow-emerald-400/25",
     "DIAMOND": "bg-gradient-to-r from-blue-400 to-indigo-400 text-blue-950 shadow-blue-400/20",
     "MASTER": "bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white shadow-purple-500/20",
     "GRANDMASTER": "bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-red-500/20",
@@ -318,7 +321,7 @@ function getLPBarColor(player) {
 function getRankShort(tier, rank) {
   const tierShort = {
     "IRON": "I", "BRONZE": "B", "SILVER": "S", "GOLD": "G",
-    "PLATINUM": "P", "DIAMOND": "D", "MASTER": "M",
+    "PLATINUM": "P", "EMERALD": "E", "DIAMOND": "D", "MASTER": "M",
     "GRANDMASTER": "GM", "CHALLENGER": "C"
   };
   return `${tierShort[tier] || tier}${rank}`;
@@ -375,8 +378,8 @@ function calculateWinrate(player) {
 
 function getTierPriority(tier) {
   const order = {
-    'CHALLENGER': 8, 'GRANDMASTER': 7, 'MASTER': 6, 'DIAMOND': 5,
-    'PLATINUM': 4, 'GOLD': 3, 'SILVER': 2, 'BRONZE': 1, 'IRON': 0
+    'CHALLENGER': 9, 'GRANDMASTER': 8, 'MASTER': 7, 'DIAMOND': 6,
+    'EMERALD': 5, 'PLATINUM': 4, 'GOLD': 3, 'SILVER': 2, 'BRONZE': 1, 'IRON': 0
   };
   return order[tier] ?? -1;
 }
