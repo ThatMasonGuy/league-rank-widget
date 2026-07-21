@@ -1,520 +1,723 @@
 <template>
-  <div data-tauri-drag-region
-    class="w-[600px] h-[320px] p-3 rounded-2xl bg-slate-900/70 border border-white/10 backdrop-blur-xl overflow-hidden relative"
-    style="user-select: none;">
+  <div class="league-widget" data-tauri-drag-region>
+    <div class="widget-ambient" aria-hidden="true"></div>
 
-    <!-- Ambient background -->
-    <div class="absolute inset-0 bg-gradient-to-br from-indigo-900/20 via-transparent to-violet-900/20"></div>
+    <header class="widget-header" data-tauri-drag-region>
+      <div class="brand" data-tauri-drag-region>
+        <img
+          class="brand-mark"
+          :src="appIcon"
+          alt=""
+          aria-hidden="true"
+          draggable="false"
+        />
+        <span>League Tracker</span>
+      </div>
 
-    <!-- Content -->
-    <div class="relative z-10 h-full flex flex-col">
-      <!-- Minimal Header -->
-      <div class="flex items-center justify-between mb-2.5 pb-2 border-b border-white/10">
-        <div class="flex items-center gap-2">
+      <div class="header-meta">
+        <button class="view-toggle" type="button" @click="toggleView">
+          {{ viewMode === "current" ? "History" : "Ranks" }}
+        </button>
+        <span class="header-divider" aria-hidden="true"></span>
+        <time class="clock">{{ formatClock(currentTime) }}</time>
+      </div>
+    </header>
+
+    <main class="widget-content">
+      <section
+        v-if="viewMode === 'current' && playerCards.length"
+        class="player-grid"
+      >
+        <article
+          v-for="player in playerCards"
+          :key="player.summoner_name"
+          class="player-card"
+          :class="[
+            `status-${player.activity.kind}`,
+            { 'is-unranked': player.isUnranked },
+          ]"
+          :style="getTierStyle(player.tier)"
+          role="link"
+          tabindex="0"
+          :aria-label="`Open ${player.summoner_name} on OP.GG`"
+          @click="openOpGG(player)"
+          @keydown.enter="openOpGG(player)"
+          @keydown.space.prevent="openOpGG(player)"
+        >
           <div
-            class="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <Trophy :size="12" class="text-white" />
+            class="status-rail"
+            :class="`rail-${player.activity.kind}`"
+            aria-hidden="true"
+          >
+            <span class="status-dot"></span>
+            <span class="status-line"></span>
+            <span class="status-label">{{ player.activity.label }}</span>
           </div>
-          <span class="text-sm font-semibold text-white/90">League Tracker</span>
+
+          <div class="card-body">
+            <div class="card-top">
+              <div class="identity-row">
+                <div class="player-name" :title="player.summoner_name">
+                  {{ player.summoner_name }}
+                </div>
+                <div class="last-active">{{ player.activity.lastActive }}</div>
+              </div>
+
+              <div class="rank-panel">
+                <div class="rank-main">
+                  <div class="rank-badge-slot" aria-hidden="true">
+                    <svg
+                      v-if="player.isUnranked"
+                      class="unranked-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="m9 15 6-6" />
+                    </svg>
+                    <img
+                      v-else-if="player.badgeUrl"
+                      class="rank-badge-image"
+                      :src="player.badgeUrl"
+                      alt=""
+                      draggable="false"
+                      @error="hideBrokenBadge"
+                    />
+                  </div>
+
+                  <div class="rank-lp">
+                    <strong>{{ player.league_points ?? 0 }}</strong>
+                    <span>LP</span>
+                  </div>
+                </div>
+
+                <div class="rank-heading">{{ player.rankLabel }}</div>
+              </div>
+            </div>
+
+            <div class="stats-row">
+              <div class="stat">
+                <span class="stat-label">Win rate</span>
+                <strong :class="winRateTone(player.winRate)"
+                  >{{ player.winRate }}%</strong
+                >
+              </div>
+              <span class="stats-divider" aria-hidden="true"></span>
+              <div class="stat stat-right">
+                <span class="stat-label">Streak</span>
+                <strong :class="streakTone(player)">{{
+                  player.streakLabel
+                }}</strong>
+              </div>
+            </div>
+
+            <svg
+              class="sparkline"
+              viewBox="0 0 170 25"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <defs>
+                <linearGradient
+                  :id="`spark-${player.safeId}`"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="0%"
+                    stop-color="var(--tier-accent)"
+                    stop-opacity="0.24"
+                  />
+                  <stop
+                    offset="100%"
+                    stop-color="var(--tier-accent)"
+                    stop-opacity="0"
+                  />
+                </linearGradient>
+              </defs>
+              <polygon
+                v-if="player.sparkline.length > 1"
+                :points="`${player.sparkline.map((point) => `${point.x},${point.y}`).join(' ')} 170,25 0,25`"
+                :fill="`url(#spark-${player.safeId})`"
+              />
+              <polyline
+                :points="
+                  player.sparkline
+                    .map((point) => `${point.x},${point.y}`)
+                    .join(' ')
+                "
+                fill="none"
+                stroke="var(--tier-accent)"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle
+                v-for="(point, index) in player.sparkline"
+                :key="`${player.safeId}-${index}`"
+                :cx="point.x"
+                :cy="point.y"
+                :r="index === player.sparkline.length - 1 ? 1.9 : 1.2"
+                fill="var(--tier-accent)"
+              />
+            </svg>
+
+            <div class="movement-header">
+              <span>Recent movement</span>
+              <button
+                class="opgg-link"
+                type="button"
+                @click.stop="openOpGG(player)"
+              >
+                OP.GG
+                <span class="external-link-mark" aria-hidden="true"></span>
+              </button>
+            </div>
+
+            <div class="movement-grid">
+              <div
+                v-for="movement in player.movements"
+                :key="movement.key"
+                class="movement-item"
+                :class="{ blank: movement.delta === null }"
+              >
+                <span class="movement-age">{{ movement.label }}</span>
+                <strong
+                  v-if="movement.delta !== null"
+                  :class="
+                    movement.delta > 0
+                      ? 'positive'
+                      : movement.delta < 0
+                        ? 'negative'
+                        : 'neutral'
+                  "
+                >
+                  {{ movement.delta > 0 ? "+" : "" }}{{ movement.delta }} LP
+                </strong>
+                <span v-else class="movement-placeholder">—</span>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section v-else-if="viewMode === 'history'" class="history-view">
+        <div class="history-heading">
+          <div>
+            <span class="history-kicker">Rank movement</span>
+            <strong>Recent changes</strong>
+          </div>
+          <span class="history-updated"
+            >Updated {{ formatUpdated(lastUpdated) }}</span
+          >
         </div>
-        <div class="flex items-center gap-3">
-          <button @click="toggleView"
-            class="px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 transition-all text-[10px] font-medium text-white/60 hover:text-white/90 flex items-center gap-1">
-            <History :size="10" v-if="viewMode === 'current'" />
-            <LayoutGrid :size="10" v-else />
-            {{ viewMode === 'current' ? 'History' : 'Live' }}
+
+        <div v-if="historyRows.length" class="history-list">
+          <button
+            v-for="row in historyRows"
+            :key="row.key"
+            class="history-row"
+            type="button"
+            :style="getTierStyle(row.tier)"
+            @click="openOpGG(row.player)"
+          >
+            <span class="history-accent"></span>
+            <span class="history-player">
+              <strong>{{ row.name }}</strong>
+              <small>{{ row.age }}</small>
+            </span>
+            <span class="history-rank">{{ row.rankLabel }}</span>
+            <span
+              class="history-delta"
+              :class="row.delta > 0 ? 'positive' : 'negative'"
+            >
+              {{ row.delta > 0 ? "+" : "" }}{{ row.delta }} LP
+            </span>
           </button>
-          <div class="flex items-center gap-1.5 text-[10px] text-white/50">
-            <div class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-            {{ formatTime(lastUpdated) }}
-          </div>
         </div>
-      </div>
 
-      <!-- Current View - 3 Players -->
-      <div v-if="viewMode === 'current' && players.length" class="flex-1 grid grid-cols-3 gap-2">
-        <div v-for="player in sortPlayers(players)" :key="player.summoner_name" class="group relative cursor-pointer"
-          @click="openOpGG(player)">
-
-          <!-- Card with rank-based tint -->
-          <div :class="[
-            'h-full rounded-xl p-2.5 border transition-all duration-300 relative overflow-hidden',
-            player.recently_played
-              ? 'border-emerald-500/40 shadow-lg shadow-emerald-500/10'
-              : 'border-white/10 hover:border-white/20',
-            getTierCardClass(player.tier)
-          ]">
-
-            <!-- Active glow for recently played -->
-            <div v-if="player.recently_played"
-              class="absolute inset-0 bg-gradient-to-t from-emerald-500/15 to-transparent"></div>
-
-            <div class="relative z-10 h-full flex flex-col">
-              <!-- Name & Status Row -->
-              <div class="flex items-center justify-between gap-2 mb-2">
-                <span class="font-semibold text-sm text-white truncate min-w-0 flex-1">{{ player.summoner_name }}</span>
-                <div v-if="player.recently_played"
-                  class="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40">
-                  <div class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-                  <span class="text-[9px] font-bold text-emerald-300">LIVE</span>
-                </div>
-                <div v-else class="flex-shrink-0 text-xs text-white/50 font-medium">
-                  {{ formatLastPlayed(player.last_match_end_time) }}
-                </div>
-              </div>
-
-              <!-- Rank Badge -->
-              <div class="flex items-center gap-2 mb-2">
-                <div :class="[tierBadgeClass(player.tier), 'px-2 py-1 rounded-lg flex items-center gap-1.5']">
-                  <component :is="getTierIcon(player.tier)" :size="14" />
-                  <span class="text-sm font-black uppercase tracking-wide">
-                    {{ player.tier }} {{ player.rank }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- LP with Progress Bar -->
-              <div class="mb-2">
-                <div class="flex items-baseline justify-between mb-1">
-                  <span class="text-2xl font-black text-white">{{ player.league_points }}</span>
-                  <span class="text-xs text-white/50 font-medium">LP</span>
-                </div>
-                <div class="h-1.5 bg-black/30 rounded-full overflow-hidden">
-                  <div class="h-full rounded-full transition-all duration-500" :class="getLPBarColor(player)"
-                    :style="{ width: `${player.league_points}%` }">
-                  </div>
-                </div>
-              </div>
-
-              <!-- W/L Row -->
-              <div class="flex items-center gap-2 mb-2">
-                <div
-                  class="flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/20">
-                  <span class="text-lg font-bold text-emerald-400">{{ player.wins }}</span>
-                  <span class="text-[10px] text-emerald-400/70 font-semibold">W</span>
-                </div>
-                <div
-                  class="flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-rose-500/15 border border-rose-500/20">
-                  <span class="text-lg font-bold text-rose-400">{{ player.losses }}</span>
-                  <span class="text-[10px] text-rose-400/70 font-semibold">L</span>
-                </div>
-              </div>
-
-              <!-- Recent Games Row (fills the gap) -->
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-1">
-                  <span class="text-[10px] text-white/40 mr-1">Recent:</span>
-                  <div v-for="(game, idx) in getRecentGames(player)" :key="idx" :class="[
-                    'w-5 h-5 rounded flex items-center justify-center text-[9px] font-bold',
-                    game === 'W'
-                      ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-rose-500/25 text-rose-400 border border-rose-500/30'
-                  ]">
-                    {{ game }}
-                  </div>
-                </div>
-                <div :class="[
-                  'text-sm font-bold tabular-nums',
-                  calculateWinrate(player) >= 55 ? 'text-emerald-400' :
-                    calculateWinrate(player) >= 48 ? 'text-white/70' : 'text-rose-400'
-                ]">
-                  {{ calculateWinrate(player) }}<span class="text-[10px] opacity-60">%</span>
-                </div>
-              </div>
-
-              <!-- Bottom: Streak indicator -->
-              <div class="mt-auto flex items-center justify-between pt-1.5 border-t border-white/10">
-                <!-- Last Game Result -->
-                <div v-if="player.win_streak > 0 || player.loss_streak > 0" class="flex items-center gap-1.5">
-                  <div v-if="player.win_streak > 0" :class="[
-                    'flex items-center gap-1 px-2 py-0.5 rounded-md border',
-                    player.win_streak >= 3
-                      ? 'bg-gradient-to-r from-orange-500/25 to-amber-500/25 border-orange-400/40'
-                      : 'bg-emerald-500/20 border-emerald-500/30'
-                  ]">
-                    <Flame v-if="player.win_streak >= 3" :size="12" class="text-orange-400" />
-                    <TrendingUp v-else :size="12" class="text-emerald-400" />
-                    <span :class="[
-                      'text-sm font-bold',
-                      player.win_streak >= 3 ? 'text-orange-300' : 'text-emerald-400'
-                    ]">{{ player.win_streak }}W</span>
-                    <span v-if="player.win_streak >= 4"
-                      class="text-[9px] text-orange-400 font-bold animate-pulse ml-0.5">🔥</span>
-                  </div>
-
-                  <div v-else-if="player.loss_streak > 0" :class="[
-                    'flex items-center gap-1 px-2 py-0.5 rounded-md border',
-                    player.loss_streak >= 3
-                      ? 'bg-gradient-to-r from-blue-500/25 to-cyan-500/25 border-blue-400/40'
-                      : 'bg-rose-500/20 border-rose-500/30'
-                  ]">
-                    <Snowflake v-if="player.loss_streak >= 3" :size="12" class="text-blue-400" />
-                    <TrendingDown v-else :size="12" class="text-rose-400" />
-                    <span :class="[
-                      'text-sm font-bold',
-                      player.loss_streak >= 3 ? 'text-blue-300' : 'text-rose-400'
-                    ]">{{ player.loss_streak }}L</span>
-                    <span v-if="player.loss_streak >= 4" class="text-[9px] text-blue-400 font-bold ml-0.5">💀</span>
-                  </div>
-                </div>
-                <div v-else class="text-xs text-white/30">No streak</div>
-
-                <!-- Click hint -->
-                <div
-                  class="text-[9px] text-white/30 group-hover:text-white/50 transition-colors flex items-center gap-0.5">
-                  <ExternalLink :size="9" />
-                  op.gg
-                </div>
-              </div>
-            </div>
-          </div>
+        <div v-else class="history-empty-state">
+          <strong>No meaningful changes yet</strong>
+          <span
+            >The tracker has snapshots, but nothing moved. Riveting stuff.</span
+          >
         </div>
-      </div>
+      </section>
 
-      <!-- History View -->
-      <div v-else-if="viewMode === 'history' && history.length" class="flex-1 overflow-y-auto custom-scrollbar pr-1">
-        <div class="space-y-0.5">
-          <div v-for="(entry, index) in history.slice(0, 25)" :key="entry.id">
-            <div :class="[
-              'flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all',
-              getLPChange(entry, history[index + 1]).isPromotion
-                ? 'bg-gradient-to-r from-amber-500/20 to-transparent border-l-2 border-amber-400'
-                : getLPChange(entry, history[index + 1]).isDemotion
-                  ? 'bg-gradient-to-r from-violet-500/20 to-transparent border-l-2 border-violet-400'
-                  : 'hover:bg-white/5 border-l-2 border-transparent'
-            ]">
-              <!-- Player name -->
-              <div class="w-24 min-w-0">
-                <div class="text-xs font-semibold text-white/90 truncate">{{ entry.summoner_name.split(' ')[0] }}</div>
-                <div class="text-[10px] text-white/40">{{ formatHistoryTime(entry.updated_at) }}</div>
-              </div>
-
-              <!-- Rank badge mini -->
-              <div :class="[tierBadgeClass(entry.tier), 'text-[9px] font-black px-1.5 py-0.5 rounded']">
-                {{ getRankShort(entry.tier, entry.rank) }}
-              </div>
-
-              <!-- LP Change -->
-              <div class="flex-1 flex items-center justify-center">
-                <div v-if="getLPChange(entry, history[index + 1]).change !== 0" :class="[
-                  'flex items-center gap-1 px-2 py-0.5 rounded-md',
-                  getLPChange(entry, history[index + 1]).change > 0
-                    ? 'bg-emerald-500/20 text-emerald-400'
-                    : 'bg-rose-500/20 text-rose-400'
-                ]">
-                  <component :is="getLPChange(entry, history[index + 1]).change > 0 ? TrendingUp : TrendingDown"
-                    :size="11" />
-                  <span class="text-xs font-bold">
-                    {{ getLPChange(entry, history[index + 1]).change > 0 ? '+' : '' }}{{ getLPChange(entry,
-                      history[index + 1]).change }}
-                  </span>
-                </div>
-                <span v-else class="text-[10px] text-white/30">—</span>
-              </div>
-
-              <!-- Current LP -->
-              <div class="w-12 text-right">
-                <span class="text-sm font-bold text-white/80">{{ entry.league_points }}</span>
-                <span class="text-[10px] text-white/40 ml-0.5">LP</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Loading -->
-      <div v-else class="flex-1 flex items-center justify-center">
-        <div class="text-center">
-          <Loader2 :size="20" class="text-indigo-400 animate-spin mx-auto mb-2" />
-          <div class="text-xs text-white/50">Loading...</div>
-        </div>
-      </div>
-    </div>
+      <section v-else class="loading-state">
+        <span class="loading-mark" aria-hidden="true"></span>
+        <strong>Loading ranks</strong>
+        <span>Waiting for the API to remember it has one job.</span>
+      </section>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import {
-  Trophy, TrendingUp, TrendingDown, Flame, Snowflake,
-  Loader2, History, LayoutGrid, Crown, Shield, Gem, Star, ExternalLink
-} from "lucide-vue-next";
+import ironBadge from "./assets/ranks/iron.png";
+import bronzeBadge from "./assets/ranks/bronze.png";
+import silverBadge from "./assets/ranks/silver.png";
+import goldBadge from "./assets/ranks/gold.png";
+import platinumBadge from "./assets/ranks/platinum.png";
+import emeraldBadge from "./assets/ranks/emerald.png";
+import diamondBadge from "./assets/ranks/diamond.png";
+import masterBadge from "./assets/ranks/master.png";
+import grandmasterBadge from "./assets/ranks/grandmaster.png";
+import challengerBadge from "./assets/ranks/challenger.png";
+import appIcon from "./assets/icon.png";
+
+const badgeUrls = {
+  IRON: ironBadge,
+  BRONZE: bronzeBadge,
+  SILVER: silverBadge,
+  GOLD: goldBadge,
+  PLATINUM: platinumBadge,
+  EMERALD: emeraldBadge,
+  DIAMOND: diamondBadge,
+  MASTER: masterBadge,
+  GRANDMASTER: grandmasterBadge,
+  CHALLENGER: challengerBadge,
+};
+
+const tierOrder = [
+  "IRON",
+  "BRONZE",
+  "SILVER",
+  "GOLD",
+  "PLATINUM",
+  "EMERALD",
+  "DIAMOND",
+  "MASTER",
+  "GRANDMASTER",
+  "CHALLENGER",
+];
+
+const rankOrder = { IV: 0, III: 1, II: 2, I: 3 };
+const movementPeriods = [
+  { label: "2D", days: 2 },
+  { label: "4D", days: 4 },
+  { label: "18D", days: 18 },
+];
+
+const tierThemes = {
+  IRON: ["#a7a7a7", "rgba(167, 167, 167, 0.14)", "rgba(167, 167, 167, 0.32)"],
+  BRONZE: ["#d58a5d", "rgba(213, 138, 93, 0.14)", "rgba(213, 138, 93, 0.34)"],
+  SILVER: ["#8eb8e8", "rgba(142, 184, 232, 0.13)", "rgba(142, 184, 232, 0.34)"],
+  GOLD: ["#e8bd5c", "rgba(232, 189, 92, 0.14)", "rgba(232, 189, 92, 0.34)"],
+  PLATINUM: ["#5fd2cf", "rgba(95, 210, 207, 0.13)", "rgba(95, 210, 207, 0.34)"],
+  EMERALD: ["#4bdc92", "rgba(75, 220, 146, 0.15)", "rgba(75, 220, 146, 0.38)"],
+  DIAMOND: [
+    "#7fa9ff",
+    "rgba(127, 169, 255, 0.14)",
+    "rgba(127, 169, 255, 0.36)",
+  ],
+  MASTER: ["#c782ff", "rgba(199, 130, 255, 0.14)", "rgba(199, 130, 255, 0.36)"],
+  GRANDMASTER: [
+    "#ff736c",
+    "rgba(255, 115, 108, 0.14)",
+    "rgba(255, 115, 108, 0.36)",
+  ],
+  CHALLENGER: [
+    "#65d9ff",
+    "rgba(101, 217, 255, 0.14)",
+    "rgba(101, 217, 255, 0.38)",
+  ],
+  UNRANKED: [
+    "#76808e",
+    "rgba(118, 128, 142, 0.08)",
+    "rgba(118, 128, 142, 0.22)",
+  ],
+};
 
 const players = ref([]);
 const history = ref([]);
 const lastUpdated = ref("");
-const viewMode = ref('current');
+const viewMode = ref("current");
+const currentTime = ref(new Date());
+
+let rankRefreshTimer;
+let historyRefreshTimer;
+let clockTimer;
+
+const historyByPlayer = computed(() => {
+  const grouped = new Map();
+
+  for (const entry of history.value) {
+    const name = entry?.summoner_name;
+    if (!name) continue;
+    if (!grouped.has(name)) grouped.set(name, []);
+    grouped.get(name).push(entry);
+  }
+
+  for (const entries of grouped.values()) {
+    entries.sort(
+      (a, b) => parseTimestamp(b.updated_at) - parseTimestamp(a.updated_at),
+    );
+  }
+
+  return grouped;
+});
+
+const playerCards = computed(() =>
+  sortPlayers(players.value).map((player) => {
+    const tier = normalizeTier(player.tier);
+    const movements = getRecentMovements(player);
+
+    return {
+      ...player,
+      tier,
+      isUnranked: tier === "UNRANKED",
+      rankLabel: formatRank(player),
+      badgeUrl: badgeUrls[tier] ?? null,
+      winRate: calculateWinRate(player),
+      streakLabel: formatStreak(player),
+      activity: getActivity(player),
+      movements,
+      sparkline: getSparkline(player),
+      safeId: String(player.summoner_name || "player").replace(
+        /[^a-zA-Z0-9_-]/g,
+        "-",
+      ),
+    };
+  }),
+);
+
+const historyRows = computed(() => {
+  const rows = [];
+  const playerLookup = new Map(
+    players.value.map((player) => [player.summoner_name, player]),
+  );
+
+  for (const [name, entries] of historyByPlayer.value.entries()) {
+    const snapshots = collapseUnchanged(entries);
+
+    for (let index = 0; index < snapshots.length - 1; index += 1) {
+      const current = snapshots[index];
+      const previous = snapshots[index + 1];
+      const delta = rankScore(current) - rankScore(previous);
+      if (!delta) continue;
+
+      rows.push({
+        key: `${name}-${current.updated_at}-${index}`,
+        name,
+        player: playerLookup.get(name) ?? current,
+        tier: normalizeTier(current.tier),
+        rankLabel: formatRank(current),
+        delta,
+        timestamp: parseTimestamp(current.updated_at),
+        age: formatCompactAge(current.updated_at),
+      });
+    }
+  }
+
+  return rows.sort((a, b) => b.timestamp - a.timestamp).slice(0, 18);
+});
 
 function toggleView() {
-  viewMode.value = viewMode.value === 'current' ? 'history' : 'current';
-  if (viewMode.value === 'history' && history.value.length === 0) {
-    fetchHistory();
-  }
+  viewMode.value = viewMode.value === "current" ? "history" : "current";
 }
 
 async function openOpGG(player) {
-  const name = encodeURIComponent(player.summoner_name + '-OC');
+  if (!player?.summoner_name) return;
+  const name = encodeURIComponent(`${player.summoner_name}-OC`);
   const url = `https://www.op.gg/summoners/oce/${name}`;
+
   try {
     await openUrl(url);
-  } catch (err) {
-    console.error("Failed to open browser:", err);
+  } catch (error) {
+    console.error("Failed to open OP.GG:", error);
   }
 }
 
-function getTierIcon(tier) {
-  const icons = {
-    'CHALLENGER': Crown,
-    'GRANDMASTER': Crown,
-    'MASTER': Gem,
-    'DIAMOND': Gem,
-    'EMERALD': Gem,
-    'PLATINUM': Star,
-    'GOLD': Star,
-    'SILVER': Shield,
-    'BRONZE': Shield,
-    'IRON': Shield
-  };
-  return icons[tier] || Shield;
+function hideBrokenBadge(event) {
+  event.currentTarget.hidden = true;
 }
 
-function getTierCardClass(tier) {
-  const classes = {
-    "IRON": "bg-gradient-to-br from-zinc-800/50 to-zinc-900/50",
-    "BRONZE": "bg-gradient-to-br from-orange-900/30 to-amber-950/30",
-    "SILVER": "bg-gradient-to-br from-slate-600/25 to-slate-700/25",
-    "GOLD": "bg-gradient-to-br from-yellow-900/30 to-amber-900/30",
-    "PLATINUM": "bg-gradient-to-br from-teal-900/30 to-cyan-900/30",
-    "EMERALD": "bg-gradient-to-br from-emerald-900/35 to-green-900/35",
-    "DIAMOND": "bg-gradient-to-br from-blue-900/35 to-indigo-900/35",
-    "MASTER": "bg-gradient-to-br from-purple-900/35 to-fuchsia-900/35",
-    "GRANDMASTER": "bg-gradient-to-br from-red-900/35 to-rose-900/35",
-    "CHALLENGER": "bg-gradient-to-br from-cyan-900/35 to-blue-900/35"
-  };
-  return classes[tier] || "bg-white/5";
+function normalizeTier(tier) {
+  const normalized = String(tier || "UNRANKED").toUpperCase();
+  return tierOrder.includes(normalized) ? normalized : "UNRANKED";
 }
 
-function tierBadgeClass(tier) {
-  const classes = {
-    "IRON": "bg-gradient-to-r from-zinc-600 to-zinc-700 text-zinc-200 shadow-zinc-600/20",
-    "BRONZE": "bg-gradient-to-r from-orange-700 to-amber-600 text-orange-100 shadow-orange-600/20",
-    "SILVER": "bg-gradient-to-r from-slate-300 to-slate-400 text-slate-900 shadow-slate-400/20",
-    "GOLD": "bg-gradient-to-r from-yellow-500 to-amber-400 text-yellow-950 shadow-yellow-500/20",
-    "PLATINUM": "bg-gradient-to-r from-teal-300 to-cyan-400 text-teal-950 shadow-cyan-400/20",
-    "EMERALD": "bg-gradient-to-r from-emerald-400 to-green-500 text-emerald-950 shadow-emerald-400/25",
-    "DIAMOND": "bg-gradient-to-r from-blue-400 to-indigo-400 text-blue-950 shadow-blue-400/20",
-    "MASTER": "bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white shadow-purple-500/20",
-    "GRANDMASTER": "bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-red-500/20",
-    "CHALLENGER": "bg-gradient-to-r from-cyan-300 via-blue-300 to-indigo-300 text-blue-950 shadow-cyan-400/30"
-  };
-  return (classes[tier] || "bg-gradient-to-r from-gray-600 to-gray-500 text-gray-100") + " shadow-lg";
+function formatRank(player) {
+  const tier = normalizeTier(player?.tier);
+  if (tier === "UNRANKED") return "UNRANKED";
+  if (["MASTER", "GRANDMASTER", "CHALLENGER"].includes(tier)) return tier;
+  return `${tier} ${player?.rank || "IV"}`;
 }
 
-function getLPBarColor(player) {
-  if (player.league_points >= 75) return 'bg-gradient-to-r from-emerald-500 to-emerald-400';
-  if (player.league_points >= 50) return 'bg-gradient-to-r from-indigo-500 to-indigo-400';
-  if (player.league_points >= 25) return 'bg-gradient-to-r from-amber-500 to-amber-400';
-  return 'bg-gradient-to-r from-rose-500 to-rose-400';
+function calculateWinRate(player) {
+  const wins = Number(player?.wins) || 0;
+  const losses = Number(player?.losses) || 0;
+  const total = wins + losses;
+  return total ? Math.round((wins / total) * 100) : 0;
 }
 
-function getRankShort(tier, rank) {
-  const tierShort = {
-    "IRON": "I", "BRONZE": "B", "SILVER": "S", "GOLD": "G",
-    "PLATINUM": "P", "EMERALD": "E", "DIAMOND": "D", "MASTER": "M",
-    "GRANDMASTER": "GM", "CHALLENGER": "C"
-  };
-  return `${tierShort[tier] || tier}${rank}`;
+function formatStreak(player) {
+  const winStreak = Number(player?.win_streak) || 0;
+  const lossStreak = Number(player?.loss_streak) || 0;
+  if (winStreak > 0) return `${winStreak}W`;
+  if (lossStreak > 0) return `${lossStreak}L`;
+  return "—";
 }
 
-function getRecentGames(player) {
-  // Generate recent games based on streak info
-  // This is a simulation - ideally your API would return actual match history
-  const games = [];
-
-  if (player.win_streak > 0) {
-    for (let i = 0; i < Math.min(player.win_streak, 4); i++) {
-      games.push('W');
-    }
-  } else if (player.loss_streak > 0) {
-    for (let i = 0; i < Math.min(player.loss_streak, 4); i++) {
-      games.push('L');
-    }
-  }
-
-  // Fill remaining slots with alternating pattern based on winrate
-  const winrate = calculateWinrate(player) / 100;
-  while (games.length < 4) {
-    // Use a simple deterministic pattern based on position and winrate
-    const shouldWin = ((games.length * 37 + player.wins) % 100) / 100 < winrate;
-    games.push(shouldWin ? 'W' : 'L');
-  }
-
-  return games.slice(0, 4);
+function streakTone(player) {
+  if ((Number(player?.win_streak) || 0) > 0) return "positive";
+  if ((Number(player?.loss_streak) || 0) > 0) return "negative";
+  return "neutral";
 }
 
-function getLPChange(current, previous) {
-  if (!previous || previous.summoner_name !== current.summoner_name) {
-    return { change: 0, isPromotion: false, isDemotion: false };
-  }
+function winRateTone(winRate) {
+  if (winRate >= 52) return "positive";
+  if (winRate <= 47) return "negative";
+  return "neutral";
+}
 
-  const change = current.league_points - previous.league_points;
-  const isPromotion = (
-    getTierPriority(current.tier) > getTierPriority(previous.tier) ||
-    (current.tier === previous.tier && getRankPriority(current.rank) > getRankPriority(previous.rank))
-  );
-  const isDemotion = (
-    getTierPriority(current.tier) < getTierPriority(previous.tier) ||
-    (current.tier === previous.tier && getRankPriority(current.rank) < getRankPriority(previous.rank))
+function getActivity(player) {
+  const explicitlyInGame = Boolean(
+    player?.in_game ||
+    player?.is_in_game ||
+    player?.active_now ||
+    player?.status === "in_game" ||
+    player?.status === "active",
   );
 
-  return { change, isPromotion, isDemotion };
+  const lastMatch = Number(player?.last_match_end_time) || 0;
+  const elapsed = lastMatch ? Date.now() - lastMatch : Number.POSITIVE_INFINITY;
+  const lastActive = formatLastPlayed(lastMatch);
+
+  if (explicitlyInGame)
+    return { kind: "live", label: "IN GAME", lastActive: "Active now" };
+  if (elapsed <= 60 * 60 * 1000)
+    return { kind: "recent", label: "RECENT", lastActive };
+  return { kind: "offline", label: "OFFLINE", lastActive };
 }
 
-function calculateWinrate(player) {
-  const total = player.wins + player.losses;
-  return total > 0 ? Math.round((player.wins / total) * 100) : 0;
-}
-
-function getTierPriority(tier) {
-  const order = {
-    'CHALLENGER': 9, 'GRANDMASTER': 8, 'MASTER': 7, 'DIAMOND': 6,
-    'EMERALD': 5, 'PLATINUM': 4, 'GOLD': 3, 'SILVER': 2, 'BRONZE': 1, 'IRON': 0
+function getTierStyle(tier) {
+  const [accent, soft, border] =
+    tierThemes[normalizeTier(tier)] ?? tierThemes.UNRANKED;
+  return {
+    "--tier-accent": accent,
+    "--tier-soft": soft,
+    "--tier-border": border,
   };
-  return order[tier] ?? -1;
 }
 
-function getRankPriority(rank) {
-  const order = { 'I': 4, 'II': 3, 'III': 2, 'IV': 1 };
-  return order[rank] ?? 0;
+function rankScore(entry) {
+  const tier = normalizeTier(entry?.tier);
+  if (tier === "UNRANKED") return -100;
+
+  const tierIndex = tierOrder.indexOf(tier);
+  const division = rankOrder[String(entry?.rank || "").toUpperCase()] ?? 0;
+  const lp = Number(entry?.league_points) || 0;
+
+  return tierIndex * 400 + division * 100 + lp;
 }
 
-function sortPlayers(players) {
-  return [...players].sort((a, b) => {
-    const tierDiff = getTierPriority(b.tier) - getTierPriority(a.tier);
-    if (tierDiff !== 0) return tierDiff;
-    const rankDiff = getRankPriority(b.rank) - getRankPriority(a.rank);
-    if (rankDiff !== 0) return rankDiff;
-    return (b.league_points || 0) - (a.league_points || 0);
+function collapseUnchanged(entries) {
+  const collapsed = [];
+
+  for (const entry of entries) {
+    if (
+      !collapsed.length ||
+      rankScore(entry) !== rankScore(collapsed[collapsed.length - 1])
+    ) {
+      collapsed.push(entry);
+    }
+  }
+
+  return collapsed;
+}
+
+function getSnapshots(player) {
+  const entries = historyByPlayer.value.get(player.summoner_name) ?? [];
+  const snapshots = [player, ...entries]
+    .filter(Boolean)
+    .sort(
+      (a, b) => parseTimestamp(b.updated_at) - parseTimestamp(a.updated_at),
+    );
+
+  const deduped = [];
+  const seen = new Set();
+
+  for (const snapshot of snapshots) {
+    const key = `${snapshot.updated_at || ""}-${rankScore(snapshot)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(snapshot);
+  }
+
+  return deduped;
+}
+
+function getRecentMovements(player) {
+  const snapshots = getSnapshots(player)
+    .map((snapshot) => ({
+      snapshot,
+      timestamp: parseTimestamp(snapshot.updated_at),
+    }))
+    .filter((entry) => entry.timestamp)
+    .sort((a, b) => b.timestamp - a.timestamp);
+
+  const currentTier = normalizeTier(player?.tier);
+  const currentScore = rankScore(player);
+  const now = Date.now();
+
+  return movementPeriods.map(({ label, days }) => {
+    if (currentTier === "UNRANKED") {
+      return { key: label, label, delta: null };
+    }
+
+    const cutoff = now - days * 24 * 60 * 60 * 1000;
+    const baseline = snapshots.find((entry) => entry.timestamp <= cutoff);
+
+    if (!baseline || normalizeTier(baseline.snapshot?.tier) === "UNRANKED") {
+      return { key: label, label, delta: null };
+    }
+
+    return {
+      key: label,
+      label,
+      delta: currentScore - rankScore(baseline.snapshot),
+    };
   });
 }
 
-function formatTime(isoString) {
-  if (!isoString) return "—";
-  const date = new Date(isoString);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function getSparkline(player) {
+  const snapshots = collapseUnchanged(getSnapshots(player))
+    .slice(0, 7)
+    .reverse();
+  const values = snapshots.map(rankScore);
+
+  if (!values.length)
+    return [
+      { x: 0, y: 12.5 },
+      { x: 170, y: 12.5 },
+    ];
+  if (values.length === 1)
+    return [
+      { x: 0, y: 12.5 },
+      { x: 170, y: 12.5 },
+    ];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(max - min, 1);
+
+  return values.map((value, index) => ({
+    x: Number(((index / (values.length - 1)) * 170).toFixed(2)),
+    y: Number((22 - ((value - min) / range) * 18).toFixed(2)),
+  }));
 }
 
-function formatHistoryTime(dateString) {
-  const date = new Date(dateString.replace(" ", "T") + "Z");
-  const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffDays > 0) return `${diffDays}d ago`;
-  if (diffHours > 0) return `${diffHours}h ago`;
-  if (diffMins > 0) return `${diffMins}m ago`;
-  return 'just now';
+function sortPlayers(list) {
+  return [...list].sort((a, b) => rankScore(b) - rankScore(a));
 }
 
-function formatLastPlayed(lastMatchEndTime) {
-  if (!lastMatchEndTime) return '—';
+function parseTimestamp(value) {
+  if (!value) return 0;
+  if (typeof value === "number" || /^\d+$/.test(String(value))) {
+    const numeric = Number(value);
+    return numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+  }
 
-  const date = new Date(Number(lastMatchEndTime));
-  const now = new Date();
-  const diffMs = now - date;
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffDays > 0) return `${diffDays}d ago`;
-  if (diffHours > 0) return `${diffHours}h ago`;
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  if (diffMins > 0) return `${diffMins}m ago`;
-  return 'just now';
+  const raw = String(value);
+  const normalized = raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`;
+  const parsed = Date.parse(normalized);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function isRecentlyPlayed(lastMatchEndTime) {
-  if (!lastMatchEndTime) return false;
-  return Date.now() - Number(lastMatchEndTime) < 60 * 60 * 1000;
+function formatLastPlayed(timestamp) {
+  if (!timestamp) return "No games yet";
+  return formatAgeFromMs(Date.now() - timestamp, false);
+}
+
+function formatCompactAge(value) {
+  const timestamp = parseTimestamp(value);
+  if (!timestamp) return "—";
+  return formatAgeFromMs(Date.now() - timestamp, true);
+}
+
+function formatAgeFromMs(diffMs, compact) {
+  const safeDiff = Math.max(0, diffMs);
+  const minutes = Math.floor(safeDiff / 60_000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (compact) {
+    if (days > 0) return `${days}D`;
+    if (hours > 0) return `${hours}H`;
+    if (minutes > 0) return `${minutes}M`;
+    return "NOW";
+  }
+
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
+  if (minutes > 0) return `${minutes}m ago`;
+  return "Just now";
+}
+
+function formatClock(date) {
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function formatUpdated(value) {
+  const timestamp = parseTimestamp(value);
+  if (!timestamp) return "—";
+  return formatAgeFromMs(Date.now() - timestamp, false);
 }
 
 async function fetchRanks() {
   try {
-    const res = await fetch("https://lol.mxn.au/ranks");
-    if (res.ok) {
-      const data = await res.json();
-      players.value = Array.isArray(data)
-        ? data.map(p => ({ ...p, recently_played: isRecentlyPlayed(p.last_match_end_time) }))
-        : [];
-      const latest = players.value
-        .map(p => new Date(p.updated_at.replace(" ", "T") + "Z"))
-        .sort((a, b) => b - a)[0];
-      lastUpdated.value = latest?.toISOString() ?? "";
-    }
-  } catch (err) {
-    console.error("Failed to fetch ranks:", err);
+    const response = await fetch("https://lol.mxn.au/ranks");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    players.value = Array.isArray(data) ? data : [];
+
+    const latest = players.value
+      .map((player) => parseTimestamp(player.updated_at))
+      .filter(Boolean)
+      .sort((a, b) => b - a)[0];
+
+    lastUpdated.value = latest ? new Date(latest).toISOString() : "";
+  } catch (error) {
+    console.error("Failed to fetch ranks:", error);
   }
 }
 
 async function fetchHistory() {
   try {
-    const res = await fetch("https://lol.mxn.au/ranks/all");
-    if (res.ok) {
-      const data = await res.json();
-      history.value = Array.isArray(data) ? data : [];
-    }
-  } catch (err) {
-    console.error("Failed to fetch history:", err);
+    const response = await fetch("https://lol.mxn.au/ranks/all");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    history.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("Failed to fetch rank history:", error);
   }
 }
 
 onMounted(() => {
   fetchRanks();
-  setInterval(fetchRanks, 60000);
+  fetchHistory();
+
+  rankRefreshTimer = window.setInterval(fetchRanks, 60_000);
+  historyRefreshTimer = window.setInterval(fetchHistory, 5 * 60_000);
+  clockTimer = window.setInterval(() => {
+    currentTime.value = new Date();
+  }, 30_000);
+});
+
+onBeforeUnmount(() => {
+  window.clearInterval(rankRefreshTimer);
+  window.clearInterval(historyRefreshTimer);
+  window.clearInterval(clockTimer);
 });
 </script>
-
-<style>
-body {
-  background: transparent;
-}
-
-@keyframes pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.4;
-  }
-}
-
-.animate-pulse {
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
-}
-</style>
