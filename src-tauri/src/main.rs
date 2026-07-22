@@ -10,8 +10,6 @@ use tauri::{
     Manager, PhysicalPosition,
 };
 #[cfg(target_os = "windows")]
-use window_vibrancy::apply_blur;
-#[cfg(target_os = "windows")]
 use windows_sys::Win32::{
     Foundation::{HWND, RECT},
     Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, SetWindowRgn},
@@ -28,16 +26,24 @@ use windows_sys::Win32::{
 const WINDOW_CORNER_RADIUS: i32 = 17;
 
 #[cfg(target_os = "windows")]
-fn apply_rounded_window_region<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+fn native_window_handle<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> Option<HWND> {
     let Ok(handle) = window.window_handle() else {
         eprintln!("Unable to access the native window handle for rounded corners");
-        return;
+        return None;
     };
     let RawWindowHandle::Win32(handle) = handle.as_raw() else {
+        return None;
+    };
+
+    Some(handle.hwnd.get() as HWND)
+}
+
+#[cfg(target_os = "windows")]
+fn apply_rounded_window_region<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let Some(hwnd) = native_window_handle(window) else {
         return;
     };
 
-    let hwnd = handle.hwnd.get() as HWND;
     let mut client_rect = RECT {
         left: 0,
         top: 0,
@@ -157,18 +163,6 @@ fn main() {
                         if let Err(main_thread_error) =
                             effects_window.run_on_main_thread(move || {
                                 apply_rounded_window_region(&main_thread_window);
-
-                                // On current Windows 11 builds apply_acrylic uses
-                                // the DWM system-backdrop API, which paints a full
-                                // rectangular surface and ignores this window's
-                                // rounded clipping region. The composition blur
-                                // path keeps the backdrop confined to the native
-                                // shape instead.
-                                if let Err(blur_error) =
-                                    apply_blur(&main_thread_window, Some((9, 16, 24, 48)))
-                                {
-                                    eprintln!("Unable to enable native window blur: {blur_error}");
-                                }
                             })
                         {
                             eprintln!(
