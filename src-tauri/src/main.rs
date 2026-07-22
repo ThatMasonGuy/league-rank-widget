@@ -10,7 +10,7 @@ use tauri::{
     Manager, PhysicalPosition,
 };
 #[cfg(target_os = "windows")]
-use window_vibrancy::{apply_acrylic, apply_blur};
+use window_vibrancy::apply_blur;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::{
     Foundation::{HWND, RECT},
@@ -158,19 +158,16 @@ fn main() {
                             effects_window.run_on_main_thread(move || {
                                 apply_rounded_window_region(&main_thread_window);
 
-                                if let Err(acrylic_error) =
-                                    apply_acrylic(&main_thread_window, Some((9, 16, 24, 48)))
+                                // On current Windows 11 builds apply_acrylic uses
+                                // the DWM system-backdrop API, which paints a full
+                                // rectangular surface and ignores this window's
+                                // rounded clipping region. The composition blur
+                                // path keeps the backdrop confined to the native
+                                // shape instead.
+                                if let Err(blur_error) =
+                                    apply_blur(&main_thread_window, Some((9, 16, 24, 48)))
                                 {
-                                    eprintln!(
-                                        "Unable to enable native window acrylic: {acrylic_error}"
-                                    );
-                                    if let Err(blur_error) =
-                                        apply_blur(&main_thread_window, Some((9, 16, 24, 48)))
-                                    {
-                                        eprintln!(
-                                        "Unable to enable native window blur fallback: {blur_error}"
-                                    );
-                                    }
+                                    eprintln!("Unable to enable native window blur: {blur_error}");
                                 }
                             })
                         {
