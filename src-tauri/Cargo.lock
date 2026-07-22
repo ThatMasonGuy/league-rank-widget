@@ -2010,7 +2010,6 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 name = "league-rank-widget"
 version = "1.0.0"
 dependencies = [
- "raw-window-handle",
  "serde",
  "serde_json",
  "tauri",
@@ -2018,7 +2017,6 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-process",
  "tauri-plugin-updater",
- "windows-sys 0.59.0",
 ]
 
 [[package]]

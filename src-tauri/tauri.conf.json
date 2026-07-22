@@ -35,7 +35,7 @@
       "open": true
     },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFDNEFBMTFDMzg4Q0UwMTQKUldRVTRJdzRIS0ZLckw5RHo5VnhMWThaRU1jaS9aM3NoTFl5Tk11OC9NYzQwSUlMa0xSVWwyKzYK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEwOUE1RTQ2MjBDQjMxQwpSV1Fjc3d4aTVLVUpDZ21Eei8xck9kdEdxMDd3OUs3ZzY3cjhxc3RKNStBbmY0ZU43WHdHbjZwMAo=",
       "endpoints": [
         "https://github.com/ThatMasonGuy/league-rank-widget/releases/latest/download/latest.json"
       ],
