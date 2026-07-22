@@ -60,8 +60,8 @@ button {
   border-radius: 17px;
 
   background:
-    linear-gradient(180deg, rgba(10, 17, 24, 0.6), rgba(8, 14, 21, 0.48)),
-    rgba(7, 12, 18, 0.24);
+    linear-gradient(180deg, rgba(10, 17, 24, 0.32), rgba(8, 14, 21, 0.22)),
+    rgba(7, 12, 18, 0.08);
 
   box-shadow:
     0 18px 50px rgba(0, 0, 0, 0.38),
@@ -195,14 +195,13 @@ button {
   border-radius: 13px;
   background:
     radial-gradient(circle at 50% 28%, var(--tier-soft), transparent 48%),
-    linear-gradient(180deg, rgba(20, 29, 39, 0.74), rgba(9, 16, 23, 0.83));
+    linear-gradient(180deg, rgba(20, 29, 39, 0.42), rgba(9, 16, 23, 0.56));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.035),
     0 8px 18px rgba(0, 0, 0, 0.14);
   cursor: pointer;
   transition:
     border-color 150ms ease,
-    transform 150ms ease,
     background 150ms ease;
 }
 
@@ -223,7 +222,6 @@ button {
 .player-card:focus-visible {
   border-color: color-mix(in srgb, var(--tier-accent) 62%, transparent);
   outline: none;
-  transform: translateY(-1px);
 }
 
 .player-card.status-active,
@@ -250,7 +248,7 @@ button {
   z-index: 3;
   display: flex;
   width: 11px;
-  height: 74px;
+  height: 106px;
   align-items: center;
   flex-direction: column;
   color: rgba(140, 151, 165, 0.58);
@@ -278,12 +276,13 @@ button {
 
 .status-line {
   width: 2px;
-  height: 22px;
+  height: 18px;
   margin-top: 2px;
   background: linear-gradient(180deg, currentColor, transparent);
 }
 
 .status-label {
+  flex: 0 0 auto;
   margin-top: 5px;
   color: currentColor;
   font-size: 6.5px;
@@ -291,6 +290,7 @@ button {
   letter-spacing: 0.13em;
   line-height: 1;
   text-transform: uppercase;
+  white-space: nowrap;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
 }

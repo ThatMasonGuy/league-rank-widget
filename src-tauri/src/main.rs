@@ -6,7 +6,7 @@ use tauri::{
     Manager, PhysicalPosition,
 };
 #[cfg(target_os = "windows")]
-use window_vibrancy::apply_blur;
+use window_vibrancy::{apply_acrylic, apply_blur};
 
 fn main() {
     tauri::Builder::default()
@@ -37,8 +37,11 @@ fn main() {
 
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "windows")]
-                if let Err(error) = apply_blur(&window, Some((10, 17, 24, 125))) {
-                    eprintln!("Unable to enable native window blur: {error}");
+                if let Err(acrylic_error) = apply_acrylic(&window, Some((9, 16, 24, 48))) {
+                    eprintln!("Unable to enable native window acrylic: {acrylic_error}");
+                    if let Err(blur_error) = apply_blur(&window, Some((9, 16, 24, 48))) {
+                        eprintln!("Unable to enable native window blur fallback: {blur_error}");
+                    }
                 }
 
                 if let Some(monitor) = window.current_monitor().unwrap() {
