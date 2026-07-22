@@ -5,10 +5,14 @@ use tauri::{
     tray::TrayIconBuilder,
     Manager, PhysicalPosition,
 };
+#[cfg(target_os = "windows")]
+use window_vibrancy::apply_blur;
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let league_tracker =
                 MenuItem::with_id(app, "league_tracker", "League Tracker", false, None::<&str>)?;
@@ -32,6 +36,11 @@ fn main() {
                 .build(app)?;
 
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(target_os = "windows")]
+                if let Err(error) = apply_blur(&window, Some((10, 17, 24, 125))) {
+                    eprintln!("Unable to enable native window blur: {error}");
+                }
+
                 if let Some(monitor) = window.current_monitor().unwrap() {
                     let size = monitor.size();
                     let x = size.width - 630;

@@ -60,8 +60,8 @@ button {
   border-radius: 17px;
 
   background:
-    linear-gradient(180deg, rgba(10, 17, 24, 0.76), rgba(8, 14, 21, 0.68)),
-    rgba(7, 12, 18, 0.45);
+    linear-gradient(180deg, rgba(10, 17, 24, 0.6), rgba(8, 14, 21, 0.48)),
+    rgba(7, 12, 18, 0.24);
 
   box-shadow:
     0 18px 50px rgba(0, 0, 0, 0.38),
@@ -148,6 +148,15 @@ button {
   outline: none;
 }
 
+.update-button {
+  color: rgba(255, 211, 121, 0.96);
+}
+
+.update-button:disabled {
+  cursor: default;
+  opacity: 0.74;
+}
+
 .header-divider {
   width: 1px;
   height: 17px;
@@ -217,7 +226,7 @@ button {
   transform: translateY(-1px);
 }
 
-.player-card.status-live,
+.player-card.status-active,
 .player-card.status-recent {
   border-color: rgba(76, 222, 146, 0.64);
   box-shadow:
@@ -226,12 +235,12 @@ button {
     0 0 17px rgba(42, 205, 128, 0.08);
 }
 
-.player-card.status-live {
-  border-color: rgba(100, 169, 255, 0.7);
+.player-card.status-active {
+  border-color: rgba(255, 190, 87, 0.88);
   box-shadow:
-    inset 2px 0 0 rgba(100, 169, 255, 0.98),
-    inset 0 1px 0 rgba(255, 255, 255, 0.045),
-    0 0 17px rgba(100, 169, 255, 0.09);
+    inset 3px 0 0 rgba(255, 190, 87, 1),
+    inset 0 1px 0 rgba(255, 246, 213, 0.13),
+    0 0 24px rgba(255, 177, 65, 0.22);
 }
 
 .status-rail {
@@ -249,12 +258,22 @@ button {
 }
 
 .status-dot {
+  position: relative;
   width: 7px;
   height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
   background: currentColor;
   box-shadow: 0 0 7px currentColor;
+}
+
+.status-active .status-dot::after {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid currentColor;
+  border-radius: inherit;
+  animation: active-ping 1.7s ease-out infinite;
+  content: "";
 }
 
 .status-line {
@@ -276,8 +295,9 @@ button {
   transform: rotate(180deg);
 }
 
-.rail-live {
-  color: #69aaff;
+.rail-active {
+  color: #ffc05c;
+  text-shadow: 0 0 8px rgba(255, 183, 68, 0.8);
 }
 
 .rail-recent {
@@ -336,12 +356,23 @@ button {
 }
 
 .status-recent .last-active,
-.status-live .last-active {
+.status-active .last-active {
   color: rgba(119, 232, 171, 0.88);
 }
 
-.status-live .last-active {
-  color: rgba(143, 190, 255, 0.94);
+.status-active .last-active {
+  color: rgba(255, 211, 121, 0.98);
+}
+
+@keyframes active-ping {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.65);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
 }
 
 .rank-panel {

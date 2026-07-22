@@ -15,6 +15,15 @@
       </div>
 
       <div class="header-meta">
+        <button
+          v-if="['available', 'downloading', 'installing'].includes(updateState)"
+          class="view-toggle update-button"
+          type="button"
+          :disabled="updateState !== 'available'"
+          @click="installUpdate"
+        >
+          {{ updateButtonLabel }}
+        </button>
         <button class="view-toggle" type="button" @click="toggleView">
           {{ viewMode === "current" ? "History" : "Ranks" }}
         </button>
@@ -259,8 +268,10 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import ironBadge from "./assets/ranks/iron.png";
 import bronzeBadge from "./assets/ranks/bronze.png";
 import silverBadge from "./assets/ranks/silver.png";
@@ -305,6 +316,8 @@ const movementPeriods = [
   { label: "4D", days: 4 },
   { label: "18D", days: 18 },
 ];
+const LIVE_STATUS_MAX_AGE_MS = 3 * 60 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const tierThemes = {
   IRON: ["#a7a7a7", "rgba(167, 167, 167, 0.14)", "rgba(167, 167, 167, 0.32)"],
@@ -341,10 +354,22 @@ const history = ref([]);
 const lastUpdated = ref("");
 const viewMode = ref("current");
 const currentTime = ref(new Date());
+const availableUpdate = shallowRef(null);
+const updateState = ref("idle");
+const updateProgress = ref(0);
 
 let rankRefreshTimer;
 let historyRefreshTimer;
 let clockTimer;
+let updateCheckTimer;
+
+const updateButtonLabel = computed(() => {
+  if (updateState.value === "downloading") {
+    return updateProgress.value ? `Updating ${updateProgress.value}%` : "Updating";
+  }
+  if (updateState.value === "installing") return "Installing";
+  return "Update";
+});
 
 const historyByPlayer = computed(() => {
   const grouped = new Map();
@@ -479,22 +504,26 @@ function winRateTone(winRate) {
   return "neutral";
 }
 
-function getActivity(player) {
-  const explicitlyInGame = Boolean(
-    player?.in_game ||
-    player?.is_in_game ||
-    player?.active_now ||
-    player?.status === "in_game" ||
-    player?.status === "active",
-  );
+function isWorkerFlagSet(value) {
+  return value === true || value === 1 || value === "1";
+}
 
+function isLiveStatusFresh(player) {
+  const checkedAt = parseTimestamp(player?.in_game_checked_at);
+  const age = Date.now() - checkedAt;
+  return checkedAt > 0 && age >= 0 && age <= LIVE_STATUS_MAX_AGE_MS;
+}
+
+function getActivity(player) {
+  const inGame = isWorkerFlagSet(player?.in_game);
+  const recentlyPlayed = isWorkerFlagSet(player?.recently_played);
   const lastMatch = Number(player?.last_match_end_time) || 0;
-  const elapsed = lastMatch ? Date.now() - lastMatch : Number.POSITIVE_INFINITY;
   const lastActive = formatLastPlayed(lastMatch);
 
-  if (explicitlyInGame)
-    return { kind: "live", label: "IN GAME", lastActive: "Active now" };
-  if (elapsed <= 60 * 60 * 1000)
+  if (inGame && isLiveStatusFresh(player)) {
+    return { kind: "active", label: "ACTIVE NOW", lastActive: "In game" };
+  }
+  if (recentlyPlayed)
     return { kind: "recent", label: "RECENT", lastActive };
   return { kind: "offline", label: "OFFLINE", lastActive };
 }
@@ -704,12 +733,64 @@ async function fetchHistory() {
   }
 }
 
+async function checkForUpdate() {
+  if (updateState.value === "checking" || updateState.value === "downloading") return;
+
+  updateState.value = "checking";
+  try {
+    const update = await check({ timeout: 15_000 });
+    availableUpdate.value = update;
+    updateState.value = update ? "available" : "idle";
+  } catch (error) {
+    // Browser previews do not have the Tauri updater bridge, and update checks
+    // must never interfere with rank polling.
+    availableUpdate.value = null;
+    updateState.value = "idle";
+    console.info("Update check unavailable:", error);
+  }
+}
+
+async function installUpdate() {
+  const update = availableUpdate.value;
+  if (!update || updateState.value !== "available") return;
+
+  updateState.value = "downloading";
+  updateProgress.value = 0;
+  let contentLength = 0;
+  let downloaded = 0;
+
+  try {
+    await update.downloadAndInstall((event) => {
+      if (event.event === "Started") {
+        contentLength = event.data.contentLength ?? 0;
+      } else if (event.event === "Progress") {
+        downloaded += event.data.chunkLength;
+        if (contentLength > 0) {
+          updateProgress.value = Math.min(
+            99,
+            Math.round((downloaded / contentLength) * 100),
+          );
+        }
+      }
+    });
+
+    updateProgress.value = 100;
+    updateState.value = "installing";
+    await relaunch();
+  } catch (error) {
+    updateState.value = "available";
+    console.error("Failed to install update:", error);
+  }
+}
+
 onMounted(() => {
   fetchRanks();
   fetchHistory();
 
   rankRefreshTimer = window.setInterval(fetchRanks, 60_000);
   historyRefreshTimer = window.setInterval(fetchHistory, 5 * 60_000);
+  checkForUpdate();
+  updateCheckTimer = window.setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
   clockTimer = window.setInterval(() => {
     currentTime.value = new Date();
   }, 30_000);
@@ -718,6 +799,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.clearInterval(rankRefreshTimer);
   window.clearInterval(historyRefreshTimer);
+  window.clearInterval(updateCheckTimer);
   window.clearInterval(clockTimer);
+  availableUpdate.value?.close().catch(() => {});
 });
 </script>
