@@ -96,14 +96,12 @@ fn main() {
 
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "windows")]
-                apply_rounded_window_region(&window);
-
-                #[cfg(target_os = "windows")]
-                if let Err(acrylic_error) = apply_acrylic(&window, Some((9, 16, 24, 48))) {
-                    eprintln!("Unable to enable native window acrylic: {acrylic_error}");
-                    if let Err(blur_error) = apply_blur(&window, Some((9, 16, 24, 48))) {
-                        eprintln!("Unable to enable native window blur fallback: {blur_error}");
-                    }
+                {
+                    // These are configured in tauri.conf.json too. Setting them at
+                    // runtime prevents Windows from restoring a native title bar or
+                    // its compositor shadow while the window is being shown.
+                    window.set_decorations(false)?;
+                    window.set_shadow(false)?;
                 }
 
                 if let Some(monitor) = window.current_monitor().unwrap() {
@@ -111,7 +109,32 @@ fn main() {
                     let x = size.width - 630;
                     let y = 10;
                     window.set_position(PhysicalPosition::new(x, y))?;
-                    window.show()?;
+                }
+
+                window.show()?;
+
+                #[cfg(target_os = "windows")]
+                {
+                    // Tauri applies native window state asynchronously. Queue the
+                    // region and acrylic after the window has been shown so Windows
+                    // cannot replace them while creating the frame.
+                    let effects_window = window.clone();
+                    window.run_on_main_thread(move || {
+                        apply_rounded_window_region(&effects_window);
+
+                        if let Err(acrylic_error) =
+                            apply_acrylic(&effects_window, Some((9, 16, 24, 48)))
+                        {
+                            eprintln!("Unable to enable native window acrylic: {acrylic_error}");
+                            if let Err(blur_error) =
+                                apply_blur(&effects_window, Some((9, 16, 24, 48)))
+                            {
+                                eprintln!(
+                                    "Unable to enable native window blur fallback: {blur_error}"
+                                );
+                            }
+                        }
+                    })?;
                 }
             }
 
